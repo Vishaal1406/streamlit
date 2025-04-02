@@ -674,35 +674,35 @@ elif st.session_state.page == "Bill":
         """
         image_filename = f"bill_{int(time.time())}.png"
         image_path = os.path.join(bills_dir, image_filename)
-        hti = Html2Image(browser='chrome', output_path=bills_dir, temp_path=bills_dir)
-        hti.browser.flags = ["--headless=new", "--disable-gpu", "--no-sandbox"]
-        hti.screenshot(html_str=bill_html, save_as=image_filename,size=(500, 1200))
-        print("Using html2image for screenshot")
+        #hti = Html2Image(browser='chrome', output_path=bills_dir, temp_path=bills_dir)
+        #hti.browser.flags = ["--headless=new", "--disable-gpu", "--no-sandbox"]
+        #hti.screenshot(html_str=bill_html, save_as=image_filename,size=(500, 1200))
+        #print("Using html2image for screenshot")
 
         time.sleep(2)
 
-        def generate_pdf(image_path):
-            if not os.path.exists(image_path):
-                print("Error: Image file not found!")
-                return None
-            buffer = BytesIO()
-            img = Image.open(image_path)
-            img_width, img_height = img.size  
-            print(f"Image loaded: {image_path} | Size: {img_width}x{img_height}")
-            pdf = canvas.Canvas(buffer, pagesize=portrait((img_width, img_height)))
-            pdf.drawImage(image_path, 0, 0, width=img_width, height=img_height)
-            pdf.showPage()
-            pdf.save()
-            buffer.seek(0)
-            return buffer
+        #def generate_pdf(image_path):
+            #if not os.path.exists(image_path):
+                #print("Error: Image file not found!")
+                #return None
+            #buffer = BytesIO()
+            #img = Image.open(image_path)
+            #img_width, img_height = img.size  
+            #print(f"Image loaded: {image_path} | Size: {img_width}x{img_height}")
+            #pdf = canvas.Canvas(buffer, pagesize=portrait((img_width, img_height)))
+            #pdf.drawImage(image_path, 0, 0, width=img_width, height=img_height)
+            #pdf.showPage()
+            #pdf.save()
+            #buffer.seek(0)
+            #return buffer
 
-        if not os.path.exists(image_path):
-            st.error(f"Error: Bill image not found! Expected path: {image_path}")
-            pdf_buffer = None
-        else:
-            pdf_buffer = generate_pdf(image_path)
-        if pdf_buffer:
-            st.download_button(translate_text("Download Bill as PDF"), pdf_buffer, file_name="bill.pdf", mime="application/pdf")
+        #if not os.path.exists(image_path):
+            #st.error(f"Error: Bill image not found! Expected path: {image_path}")
+            #pdf_buffer = None
+        #else:
+            #pdf_buffer = generate_pdf(image_path)
+        #if pdf_buffer:
+            #st.download_button(translate_text("Download Bill as PDF"), pdf_buffer, file_name="bill.pdf", mime="application/pdf")
         if st.button(translate_text("Back to Cart")):
             st.session_state.page = "Cart"
             st.rerun()
