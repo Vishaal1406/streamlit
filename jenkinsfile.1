@@ -1,0 +1,234 @@
+pipeline {
+    agent any
+	    
+    parameters {
+        choice(name: 'DEPLOY_ENV', choices: ['development', 'staging', 'production'], description: 'Select the deployment environment')
+    }
+
+    environment {
+        IMAGE_NAME = "jenkins-app"
+        CONTAINER_PORT_DEV = "8505"
+        CONTAINER_PORT_STG = "8605"
+        CONTAINER_PORT_PROD = "8705"
+        PATH = "/usr/bin:/usr/local/bin:${env.PATH}"
+    }
+    stages {
+        stage('Git Clone') {
+            steps {
+                git branch: 'main', url: 'http://gitea-n:3000/admin/streamlit-app.git'
+            }
+        }
+
+        stage('Setup Python Environment') {
+            steps {
+                sh '''
+                apt update && apt install -y python3 python3-pip python3-venv
+                python3 -m venv venv
+                '''
+            }
+        }
+
+        stage('Install System Dependencies') {
+            steps {
+                sh '''
+                apt update && apt install -y libpq-dev
+                '''
+            }
+        }
+
+        stage('Install Python Dependencies') {
+            steps {
+                sh '''
+                . venv/bin/activate
+                pip install --upgrade pip
+                pip install -r requirements.txt
+                '''
+            }
+        }
+
+        stage('Linting') {
+            steps {
+                sh '''
+                . venv/bin/activate
+                pip install pylint
+                pylint app.py
+                '''
+            }
+        }
+        stage('Check Image Files') {
+            steps {
+                sh '''
+                ls -lah images/
+                if [ ! -f images/pav_bhaji.jpg ]; then
+                    echo "ERROR: images/pav_bhaji.jpg not found!"
+                    exit 1
+                fi
+                '''
+            }
+        }
+
+        stage('Check Test File') {
+            steps {
+                sh '''
+                if [ ! -f test_app.py ]; then
+                    echo "ERROR: test_app.py not found!"
+                    exit 1
+                fi
+                '''
+            }
+        }
+
+        stage('Run Unit Tests') {
+            steps {
+                sh '''
+                    . venv/bin/activate
+                    pytest -vv -q 
+                '''
+
+            }
+        }
+
+
+
+
+        stage('Code Formatting') {
+            steps {
+                sh '''
+                . venv/bin/activate && pip install black
+                black --check .
+                '''
+            }
+        }
+
+
+        stage('Security Scan') {
+            steps {
+                sh '''
+                . venv/bin/activate
+                pip install safety
+                safety check 2>/dev/null || true
+                '''
+            }
+        }
+
+        stage('Static Code Analysis') {
+            steps {
+                sh '''
+                . venv/bin/activate
+                pip install types-requests types-ujson
+                pip install mypy
+                mypy app.py
+                '''
+            }
+        }
+
+        stage('Run Streamlit App in Background') {
+            steps {
+                sh '''
+                . venv/bin/activate
+                nohup streamlit run app.py --server.port=8501 --server.headless=true > streamlit.log 2>&1 &
+                '''
+            }
+        }
+
+        stage('Monitor Streamlit Application') {
+            steps {
+                sh '''
+                timeout 30 sh -c 'until curl -s http://localhost:8501 >/dev/null; do sleep 2; done'
+                '''
+            }
+        }
+
+        stage('Smoke Testing') {
+            steps {
+                sh '''
+                pgrep -f streamlit || exit 1
+                '''
+            }
+        }
+        stage('Run Tests & Analysis') {
+            parallel {
+                stage('Development - Run Unit Tests') {
+                    when { beforeAgent true; expression { params.DEPLOY_ENV == 'development' } }
+                    steps {
+                        sh '''
+                        . venv/bin/activate
+                        pip install pytest
+                        pytest -vv --disable-warnings -q 
+                        '''
+                    }
+                }
+
+                stage('Staging - Lint & Format') {
+                    when { beforeAgent true; expression { params.DEPLOY_ENV == 'staging' } }
+                    steps {
+                        script {
+                            sh """
+                            . venv/bin/activate
+                            pip install pylint
+                            pylint app.py
+                            pip install black
+                            black --check .
+                            """
+                        }
+                    }
+                }
+
+                stage('Production - Security Scan') {
+                    when { beforeAgent true; expression { params.DEPLOY_ENV == 'production' } }
+                    steps {
+                        script {
+                            sh """
+                            . venv/bin/activate
+                            pip install safety
+                            pip install --upgrade setuptools
+                            safety check 2>/dev/null || true
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    sh "docker build -t ${IMAGE_NAME}:${params.DEPLOY_ENV} ."
+                }
+            }
+        }
+
+        stage('Stop Existing Container') {
+            steps {
+                script {
+                    def containerName = "${params.DEPLOY_ENV}-n"
+                    sh "docker stop ${containerName} || true"
+                    sh "docker rm ${containerName} || true"
+                }
+            }
+        }
+
+        stage('Deploy to Environment') {
+            steps {
+                script {
+                    def containerName = "${params.DEPLOY_ENV}-n"
+                    def containerPort = params.DEPLOY_ENV == 'development' ? CONTAINER_PORT_DEV :
+                                        params.DEPLOY_ENV == 'staging' ? CONTAINER_PORT_STG :
+                                        CONTAINER_PORT_PROD
+                    sh """
+                    docker run -d --name ${containerName} \\
+                    -p ${containerPort}:8505 ${IMAGE_NAME}:${params.DEPLOY_ENV}
+                    """
+                }
+            }
+        }
+
+        stage('Cleanup') {
+            steps {
+                sh '''
+                rm -rf streamlit-app
+                '''
+            }
+        }
+    }
+}
