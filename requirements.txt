@@ -7,3 +7,6 @@ joblib
 deep-translator
 requests
 ujson
+reportlab
+html2image
+selenium
