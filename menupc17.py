@@ -674,23 +674,10 @@ elif st.session_state.page == "Bill":
         """
         image_filename = f"bill_{int(time.time())}.png"
         image_path = os.path.join(bills_dir, image_filename)
-
-        try:
-            hti = Html2Image(browser='chrome', output_path=bills_dir, temp_path=bills_dir)
-            hti.browser.flags = ["--headless=new", "--disable-gpu", "--no-sandbox"]
-            hti.screenshot(html_str=bill_html, save_as=image_filename,size=(500, 1200))
-            print("Using html2image for screenshot")
-        except Exception as e:
-            print("html2image failed, using Selenium:", e)
-            chrome_options = Options()
-            chrome_options.add_argument("--headless=new")
-            chrome_options.add_argument("--disable-gpu")
-            chrome_options.add_argument("--no-sandbox")
-
-            driver = webdriver.Chrome(options=chrome_options)
-            driver.get("data:text/html;charset=utf-8," + bill_html)
-            driver.save_screenshot(image_path)
-            driver.quit()
+        hti = Html2Image(browser='chrome', output_path=bills_dir, temp_path=bills_dir)
+        hti.browser.flags = ["--headless=new", "--disable-gpu", "--no-sandbox"]
+        hti.screenshot(html_str=bill_html, save_as=image_filename,size=(500, 1200))
+        print("Using html2image for screenshot")
 
         time.sleep(2)
 
